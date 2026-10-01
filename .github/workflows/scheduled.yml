@@ -2,9 +2,10 @@ name: Scheduled FitBot run
 
 on:
   # Runs Fri, Sat, Mon, Tue so that +3 days lands on Mon, Tue, Thu, Fri.
-  # 17:20 UTC = 19:20 Madrid (summer) / 18:20 Madrid (winter), right after the 18:15 slot opens.
+  # Fires early (GitHub cron is often delayed), then sleeps until 18:15:10 Madrid time.
+  # 15:30 UTC = 17:30 Madrid (summer) / 16:30 Madrid (winter).
   schedule:
-  - cron: "20 17 * * 1,2,5,6"
+  - cron: "30 15 * * 1,2,5,6"
   workflow_dispatch:
 
 jobs:
@@ -12,20 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build fitbot
-        run: docker build -t fitbot .
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --no-dev
+      - name: Wait until 18:15:10 Madrid
+        run: |
+          target=$(TZ=Europe/Madrid date -d '18:15:10' +%s)
+          now=$(date +%s)
+          echo "Sleeping $(( target - now ))s"
+          sleep $(( target > now ? target - now : 0 ))
       - name: Run fitbot
         env:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROXY: ${{ secrets.PROXY }}
         run: >
-          docker run
-          -e email="$EMAIL"
-          -e password="$PASSWORD"
-          -e box-name=crossfitsanturtzi
-          -e box-id=10320
-          -e days-in-advance=3
-          -e proxy="$PROXY"
-          -e booking-goals='{"0":{"time":"1815","name":"wod"},"1":{"time":"1815","name":"funcional"},"3":{"time":"1815","name":"strength"},"4":{"time":"1815","name":"wod"}}'
-          fitbot
+          uv run --no-sync python src/main.py
+          --email="$EMAIL"
+          --password="$PASSWORD"
+          --box-name=crossfitsanturtzi
+          --box-id=10320
+          --days-in-advance=3
+          --proxy="$PROXY"
+          --booking-goals='{"0":{"time":"1815","name":"wod"},"1":{"time":"1815","name":"funcional"},"3":{"time":"1815","name":"strength"},"4":{"time":"1815","name":"wod"}}'
