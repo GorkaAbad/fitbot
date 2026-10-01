@@ -56,6 +56,12 @@ class TestGetClassToBook:
                 does_not_raise(),
             ),
             (
+                [{"id": 123, "timeid": "1700_60", "className": "foo"}],
+                "1700",
+                "FOO",
+                does_not_raise(),
+            ),
+            (
                 [{"id": 123, "timeid": "1100_60", "className": "foo"}],
                 "1700",
                 "foo",

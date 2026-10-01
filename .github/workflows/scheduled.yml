@@ -1,12 +1,31 @@
 name: Scheduled FitBot run
 
 on:
+  # Runs Fri, Sat, Mon, Tue so that +3 days lands on Mon, Tue, Thu, Fri.
+  # 17:20 UTC = 19:20 Madrid (summer) / 18:20 Madrid (winter), right after the 18:15 slot opens.
   schedule:
-  - cron: "25 17 * * *"
+  - cron: "20 17 * * 1,2,5,6"
+  workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Build fitbot
+        run: docker build -t fitbot .
       - name: Run fitbot
-        run: docker run -e email=${{ secrets.EMAIL }} -e password=${{ secrets.PASSWORD }} -e booking-goals='{"0":{"time":"1920","name":"WOD"},"1":{"time":"1920","name":"Endurance"},"3":{"time":"1920","name":"WOD"}}' -e box-name=areacrossfit -e box-id=8266 -e days-in-advance=2 -e proxy=${{ secrets.PROXY }} pablobuenaposada/fitbot
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          PROXY: ${{ secrets.PROXY }}
+        run: >
+          docker run
+          -e email="$EMAIL"
+          -e password="$PASSWORD"
+          -e box-name=crossfitsanturtzi
+          -e box-id=10320
+          -e days-in-advance=3
+          -e proxy="$PROXY"
+          -e booking-goals='{"0":{"time":"1815","name":"wod"},"1":{"time":"1815","name":"funcional"},"3":{"time":"1815","name":"strength"},"4":{"time":"1815","name":"wod"}}'
+          fitbot
