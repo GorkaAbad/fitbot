@@ -82,7 +82,7 @@ class TestAimHarderClient:
         with patch("requests.Session.post") as m_post:
             m_post.return_value.status_code = HTTPStatus.OK
             m_post.return_value.json.return_value = LOGIN_OK
-            AimHarderClient._login(email="foo", ******
+            AimHarderClient._login("foo", password)
 
         assert json.loads(m_post.call_args.kwargs["data"]) == {
             "username": "foo",
