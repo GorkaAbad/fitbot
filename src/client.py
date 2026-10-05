@@ -81,6 +81,7 @@ class AimHarderClient:
         )
         if response.status_code == HTTPStatus.OK:
             response = response.json()
+            logger.info(f"Booking response: {response}")
             if response.get("bookState") == -2:
                 raise BookingFailed(MESSAGE_BOOKING_FAILED_NO_CREDIT)
             if response.get("bookState") == -5:

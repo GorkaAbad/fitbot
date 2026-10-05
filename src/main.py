@@ -1,5 +1,6 @@
 import argparse
 import json
+import time
 from datetime import UTC, datetime, timedelta
 
 from client import AimHarderClient
@@ -52,6 +53,7 @@ def main(
     family_id=None,
     proxy=None,
 ):
+    start = time.monotonic()
     target_day = datetime.now(tz=UTC) + timedelta(days=days_in_advance)
     try:
         target_time, target_name = get_booking_goal_time(target_day, booking_goals)
@@ -71,7 +73,7 @@ def main(
     except BookingFailed as e:
         logger.error(str(e))
         return
-    logger.info("Class booked successfully")
+    logger.info(f"Class booked successfully in {time.monotonic() - start:.2f}s")
 
 
 if __name__ == "__main__":
