@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from http import HTTPStatus
 
@@ -39,7 +40,10 @@ class AimHarderClient:
         logger.info(f"Using proxy: {'yes' if proxy else 'no'}")
         response = session.post(
             LOGIN_ENDPOINT,
-            data=f'{{"username":"{email}","password":"{password}","iniframe":0}}',
+            data=json.dumps(
+                {"username": email, "password": password, "iniframe": 0},
+                separators=(",", ":"),
+            ),
         )
         if response.status_code != HTTPStatus.OK:
             message = response.json().get("error", {}).get("message", "")

@@ -1,4 +1,5 @@
 import datetime
+import json
 from contextlib import nullcontext as does_not_raise
 from http import HTTPStatus
 from unittest.mock import patch
@@ -75,6 +76,19 @@ class TestAimHarderClient:
         assert m_post.call_args.kwargs["data"] == (
             '{"username":"foo","password":"bar","iniframe":0}'
         )
+
+    def test__login_request_body_escapes_credentials(self):
+        password = 'a"b\\c'
+        with patch("requests.Session.post") as m_post:
+            m_post.return_value.status_code = HTTPStatus.OK
+            m_post.return_value.json.return_value = LOGIN_OK
+            AimHarderClient._login("foo", password)
+
+        assert json.loads(m_post.call_args.kwargs["data"]) == {
+            "username": "foo",
+            "password": password,
+            "iniframe": 0,
+        }
 
     @pytest.mark.parametrize(
         "response, expected_classes",
