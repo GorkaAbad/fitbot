@@ -2,14 +2,14 @@ name: Scheduled FitBot run
 
 on:
   # Runs Fri, Sat, Mon, Tue so that +3 days lands on Mon, Tue, Thu, Fri.
-  # GitHub cron has been firing 3-4.5h late, so fire very early and sleep until 18:15:10 Madrid.
-  # 12:00 UTC = 14:00 Madrid (summer) / 13:00 Madrid (winter); max sleep ~5h15 < 6h job limit.
+  # The bot logs in a minute before and books at exactly 18:15:00 Madrid.
+  # 16:10 UTC = 18:10 Madrid (summer) / 17:10 Madrid (winter, cron is UTC so it starts an hour earlier).
   schedule:
-  - cron: "0 12 * * 1,2,5,6"
+  - cron: "10 16 * * 1,2,5,6"
   workflow_dispatch:
     inputs:
       wait:
-        description: "Sleep until 18:15:10 Madrid (untick to book right away, for testing)"
+        description: "Book at 18:15:00 Madrid (untick to book right away, for testing)"
         type: boolean
         default: true
       days-in-advance:
@@ -20,25 +20,19 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
         run: uv sync --no-dev
-      - name: Wait until 18:15:10 Madrid
-        if: github.event_name == 'schedule' || inputs.wait
-        run: |
-          target=$(TZ=Europe/Madrid date -d '18:15:10' +%s)
-          now=$(date +%s)
-          echo "Sleeping $(( target - now ))s"
-          sleep $(( target > now ? target - now : 0 ))
       - name: Run fitbot
         env:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROXY: ${{ secrets.PROXY }}
           DAYS: ${{ inputs.days-in-advance || '3' }}
+          BOOK_AT: ${{ (github.event_name == 'schedule' || inputs.wait) && '18:15:00' || '' }}
           GOALS: ${{ inputs.booking-goals || '{"0":{"time":"1815","name":"wod"},"1":{"time":"1815","name":"funcional"},"3":{"time":"1815","name":"strength"},"4":{"time":"1815","name":"wod"}}' }}
         run: >
           uv run --no-sync python src/main.py
@@ -49,3 +43,4 @@ jobs:
           --days-in-advance="$DAYS"
           --proxy="$PROXY"
           --booking-goals="$GOALS"
+          --book-at="$BOOK_AT"

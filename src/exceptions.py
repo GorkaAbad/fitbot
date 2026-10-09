@@ -23,6 +23,10 @@ class BookingFailed(Exception):
     pass
 
 
+class TooSoonToBook(BookingFailed):
+    pass
+
+
 class NoBookingGoal(Exception):
     pass
 

@@ -116,3 +116,71 @@ class TestMain:
                 box_id=1,
                 days_in_advance=3,
             )
+
+    @freeze_time("2022-03-04")
+    def test_main_retries_while_too_soon(self):
+        with (
+            patch("requests.Session.post") as m_post,
+            patch("requests.Session.get") as m_get,
+            patch("main.time.sleep") as m_sleep,
+        ):
+            book_responses = iter([{"bookState": -12}, {"bookState": -12}, {}])
+
+            def post(url, **kwargs):
+                if url == LOGIN_ENDPOINT:
+                    return Mock(status_code=HTTPStatus.OK)
+                return Mock(
+                    json=lambda: next(book_responses), status_code=HTTPStatus.OK
+                )
+
+            m_post.side_effect = post
+            m_get.return_value.json.return_value = {
+                "bookings": [
+                    {
+                        "id": 123,
+                        "timeid": "1700_60",
+                        "className": "Provenza",
+                        "bookState": None,
+                    }
+                ]
+            }
+            main(
+                email="foo",
+                password="bar",
+                booking_goals={"0": {"time": "1700", "name": "Provenza"}},
+                box_name="foo",
+                box_id=1,
+                days_in_advance=3,
+            )
+            assert m_sleep.call_count == 2
+            assert next(book_responses, None) is None
+
+    @freeze_time("2022-03-04 15:00:00")  # 16:00 Madrid (winter, UTC+1)
+    def test_main_waits_until_book_at(self):
+        with (
+            patch("requests.Session.post") as m_post,
+            patch("requests.Session.get") as m_get,
+            patch("main.time.sleep") as m_sleep,
+        ):
+            m_post.side_effect = self.mock_request_post
+            m_get.return_value.json.return_value = {
+                "bookings": [
+                    {
+                        "id": 123,
+                        "timeid": "1700_60",
+                        "className": "Provenza",
+                        "bookState": None,
+                    }
+                ]
+            }
+            main(
+                email="foo",
+                password="bar",
+                booking_goals={"0": {"time": "1700", "name": "Provenza"}},
+                box_name="foo",
+                box_id=1,
+                days_in_advance=3,
+                book_at="18:15:00",
+            )
+            # 18:15 Madrid = 17:15 UTC: prepare a minute before, then fire on the dot
+            assert [c.args[0] for c in m_sleep.call_args_list] == [8040, 8100]

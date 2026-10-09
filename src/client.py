@@ -17,6 +17,7 @@ from exceptions import (
     BookingFailed,
     IncorrectCredentials,
     TooManyWrongAttempts,
+    TooSoonToBook,
 )
 from logger import logger
 
@@ -82,12 +83,16 @@ class AimHarderClient:
         if response.status_code == HTTPStatus.OK:
             response = response.json()
             logger.info(f"Booking response: {response}")
-            if response.get("bookState") == -2:
-                raise BookingFailed(MESSAGE_BOOKING_FAILED_NO_CREDIT)
-            if response.get("bookState") == -5:
-                raise BookingFailed(MESSAGE_BOOKING_FAILED_PENDING_PAYMENT)
+            server_message = response.get("errorMssg") or response.get("errorMssgLang")
+            detail = f" (server says: {server_message})" if server_message else ""
             if response.get("bookState") == -12:
-                raise BookingFailed(MESSAGE_TOO_SOON_TO_BOOK)
+                raise TooSoonToBook(MESSAGE_TOO_SOON_TO_BOOK + detail)
+            if response.get("bookState") == -2:
+                raise BookingFailed(MESSAGE_BOOKING_FAILED_NO_CREDIT + detail)
+            if response.get("bookState") == -5:
+                raise BookingFailed(MESSAGE_BOOKING_FAILED_PENDING_PAYMENT + detail)
+            if server_message:
+                raise BookingFailed(MESSAGE_BOOKING_FAILED_UNKNOWN + detail)
             # booking went fine
             return
         raise BookingFailed(MESSAGE_BOOKING_FAILED_UNKNOWN)

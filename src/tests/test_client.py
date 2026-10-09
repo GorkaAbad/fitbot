@@ -17,6 +17,7 @@ from exceptions import (
     BookingFailed,
     IncorrectCredentials,
     TooManyWrongAttempts,
+    TooSoonToBook,
 )
 
 LOGIN_OK = {
@@ -157,6 +158,25 @@ class TestAimHarderClient:
                 {"bookState": -12},
                 HTTPStatus.OK,
                 pytest.raises(BookingFailed, match=MESSAGE_TOO_SOON_TO_BOOK),
+            ),
+            (
+                {"errorMssg": "foo"},
+                HTTPStatus.OK,
+                pytest.raises(
+                    BookingFailed, match=f"{MESSAGE_BOOKING_FAILED_UNKNOWN}.*foo"
+                ),
+            ),
+            (
+                {"errorMssgLang": "foo"},
+                HTTPStatus.OK,
+                pytest.raises(
+                    BookingFailed, match=f"{MESSAGE_BOOKING_FAILED_UNKNOWN}.*foo"
+                ),
+            ),
+            (
+                {"bookState": -12, "errorMssg": "opens at 18:15"},
+                HTTPStatus.OK,
+                pytest.raises(TooSoonToBook, match="opens at 18:15"),
             ),
         ),
     )

@@ -2,6 +2,8 @@ import argparse
 import json
 import time
 from datetime import UTC, datetime, timedelta
+from datetime import time as day_time
+from zoneinfo import ZoneInfo
 
 from client import AimHarderClient
 from exceptions import (
@@ -9,8 +11,20 @@ from exceptions import (
     BookingFailed,
     BoxClosed,
     NoBookingGoal,
+    TooSoonToBook,
 )
 from logger import logger
+
+# Booking may open a few seconds after we fire (clock skew, server lag), so keep trying.
+RETRY_TOO_SOON_FOR_SECONDS = 600
+RETRY_INTERVAL_SECONDS = 2
+# Log in and load classes this long before --book-at, so only the booking request is left.
+PREPARE_SECONDS_BEFORE = 60
+MADRID = ZoneInfo("Europe/Madrid")
+
+
+def sleep_until(moment: datetime):
+    time.sleep(max(0, (moment - datetime.now(tz=UTC)).total_seconds()))
 
 
 def get_booking_goal_time(day: datetime, booking_goals):
@@ -52,14 +66,20 @@ def main(
     days_in_advance,
     family_id=None,
     proxy=None,
+    book_at=None,
 ):
-    start = time.monotonic()
     target_day = datetime.now(tz=UTC) + timedelta(days=days_in_advance)
     try:
         target_time, target_name = get_booking_goal_time(target_day, booking_goals)
     except NoBookingGoal as e:
         logger.info(str(e))
         return
+    if book_at:
+        book_at = datetime.combine(
+            datetime.now(tz=MADRID).date(), day_time.fromisoformat(book_at), MADRID
+        )
+        logger.info(f"Waiting to book at {book_at.isoformat()}")
+        sleep_until(book_at - timedelta(seconds=PREPARE_SECONDS_BEFORE))
     client = AimHarderClient(
         email=email, password=password, box_id=box_id, box_name=box_name, proxy=proxy
     )
@@ -68,11 +88,22 @@ def main(
     if _class["bookState"] == 1:
         logger.info("Class already booked. Nothing to do")
         return
-    try:
-        client.book_class(target_day, _class["id"], family_id)
-    except BookingFailed as e:
-        logger.error(str(e))
-        return
+    if book_at:
+        sleep_until(book_at)
+    start = time.monotonic()
+    retry_until = time.monotonic() + RETRY_TOO_SOON_FOR_SECONDS
+    while True:
+        try:
+            client.book_class(target_day, _class["id"], family_id)
+            break
+        except TooSoonToBook as e:
+            if time.monotonic() > retry_until:
+                logger.error(str(e))
+                return
+            time.sleep(RETRY_INTERVAL_SECONDS)
+        except BookingFailed as e:
+            logger.error(str(e))
+            return
     logger.info(f"Class booked successfully in {time.monotonic() - start:.2f}s")
 
 
@@ -94,6 +125,13 @@ if __name__ == "__main__":
     parser.add_argument("--box-name", required=True, type=str)
     parser.add_argument("--box-id", required=True, type=int)
     parser.add_argument("--days-in-advance", required=True, type=int, default=3)
+    parser.add_argument(
+        "--book-at",
+        required=False,
+        type=str,
+        default=None,
+        help="Madrid time (HH:MM:SS) to fire the booking at, e.g. 18:15:00 (optional)",
+    )
     parser.add_argument("--proxy", required=False, type=str, default=None)
     parser.add_argument(
         "--family-id",
